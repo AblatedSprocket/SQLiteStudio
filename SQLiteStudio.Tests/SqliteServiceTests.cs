@@ -1,10 +1,10 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.Data.Sqlite;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SQLiteStudio.Services;
 using SQLiteStudio.Services.Models;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SQLite;
 using System.Linq;
 
 namespace SQLiteStudio.Tests
@@ -14,11 +14,17 @@ namespace SQLiteStudio.Tests
     {
         string _databasePath = @"D:\Dev\Database\home.db";
         string _testTable = "TestTable";
+        string _testColumn = "Name";
         SqliteService _sqliteService = new SqliteService();
         [TestInitialize]
         public void InitializeTestTable()
         {
-            _sqliteService.BuildTableIfNotExists(_testTable, new List<ColumnData> { new ColumnData { Name = "TestName", DataType = "character" } }, _databasePath);
+            _sqliteService.DropTableIfExists(_testTable, _databasePath);
+            _sqliteService.BuildTableIfNotExists(_testTable, new List<ColumnData>
+            {
+                new ColumnData { Name = "RowId", DataType = "INTEGER", IsAutoIncrement = true, IsPrimaryKey = true },
+                new ColumnData { Name = _testColumn, DataType = "CHAR" }
+            }, _databasePath);
         }
         #region BuildTable
         [TestMethod]
@@ -36,7 +42,7 @@ namespace SQLiteStudio.Tests
                 Assert.Fail();
             }
             //ASSERT
-            Assert.ThrowsException<SQLiteException>(() => _sqliteService.BuildTable(validTableName, new List<ColumnData> { new ColumnData { Name = "Test", DataType = "Varchar" } }, _databasePath));
+            Assert.ThrowsException<SqliteException>(() => _sqliteService.BuildTable(validTableName, new List<ColumnData> { new ColumnData { Name = "Test", DataType = "Varchar" } }, _databasePath));
             try
             {
                 _sqliteService.DropTableIfExists(validTableName, _databasePath);
@@ -80,10 +86,27 @@ namespace SQLiteStudio.Tests
             try
             {
                 //ACT
-                _sqliteService.ExecuteQuery("INSERT INTO TestTable (TestName) Values ('for')", _databasePath);
-                DataTable table = _sqliteService.GetRowData("TestTable", _databasePath);
+                IEnumerable<ColumnData> columns = _sqliteService.GetColumns(_testTable, _databasePath);
+                _sqliteService.ExecuteQuery($"INSERT INTO TestTable ({_testColumn}) Values ('for')", _databasePath);
+                _sqliteService.ExecuteQuery($"INSERT INTO TestTable ({_testColumn}) Values ('and')", _databasePath);
+                DataTable table = _sqliteService.GetRowData(_testTable, _databasePath);
                 //ASSERT
                 Assert.IsNotNull(table.Rows[0]);
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail();
+            }
+        }
+        [TestMethod]
+        public void SelectStatement_WhenTableExists_ReturnsData()
+        {
+            try
+            {
+                //ACT
+                IEnumerable<DataTable> data = _sqliteService.ExecuteQuery($"SELECT * FROM {_testTable}", _databasePath);
+                //ASSERT
+                var test = data.First();
             }
             catch (Exception)
             {

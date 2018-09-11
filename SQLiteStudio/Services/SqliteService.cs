@@ -1,9 +1,9 @@
-﻿using SQLiteStudio.Services.Models;
+﻿using Microsoft.Data.Sqlite;
+using SQLiteStudio.Services.Models;
 using SQLiteStudio.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -28,15 +28,19 @@ namespace SQLiteStudio.Services
     public class SqliteService : ISqlService
     {
         #region Public Methods
+        static SqliteService()
+        {
+            SQLitePCL.Batteries.Init();
+        }
         public void BuildDatabase(string databasePath)
         {
-            SQLiteConnection.CreateFile(databasePath);
+            File.Create(databasePath);
         }
         public void BuildTable(string table, IEnumerable<ColumnData> columnData, string databasePath)
         {
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     StringBuilder sql = new StringBuilder();
@@ -77,7 +81,7 @@ namespace SQLiteStudio.Services
                     //    Account VARCHAR(10) NOT NULL,
                     //    SerialNumber VARCHAR(10) NOT NULL
                     //)";
-                    SQLiteCommand cmd = new SQLiteCommand(sql.ToString(), conn);
+                    SqliteCommand cmd = new SqliteCommand(sql.ToString(), conn);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -90,7 +94,7 @@ namespace SQLiteStudio.Services
         {
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     StringBuilder sql = new StringBuilder();
@@ -98,7 +102,7 @@ namespace SQLiteStudio.Services
                     int ct = 0;
                     foreach (ColumnData column in columnData)
                     {
-                        if (ct != 0)
+                        if (ct++ != 0)
                         {
                             sql.Append(", ");
                         }
@@ -122,6 +126,7 @@ namespace SQLiteStudio.Services
                         }
                     }
                     sql.Append(')');
+                    //Maxlength cannot be specified along with primary key
                     //string sql = @"
                     //CREATE TABLE IF NOT EXISTS Transactions (
                     //    Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +140,7 @@ namespace SQLiteStudio.Services
                     //    Account VARCHAR(10) NOT NULL,
                     //    SerialNumber VARCHAR(10) NOT NULL
                     //)";
-                    SQLiteCommand cmd = new SQLiteCommand(sql.ToString(), conn);
+                    SqliteCommand cmd = new SqliteCommand(sql.ToString(), conn);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -148,11 +153,11 @@ namespace SQLiteStudio.Services
         {
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     string sql = $"DELETE FROM {table}";
-                    using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
+                    using (SqliteCommand cmd = new SqliteCommand(sql, conn))
                     {
                         cmd.ExecuteNonQuery();
                     }
@@ -160,7 +165,7 @@ namespace SQLiteStudio.Services
                     UPDATE sqlite_sequence
                     SET seq = 0
                     WHERE name = 'Transactions'";
-                    using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
+                    using (SqliteCommand cmd = new SqliteCommand(sql, conn))
                     {
                         cmd.ExecuteNonQuery();
                     }
@@ -176,11 +181,11 @@ namespace SQLiteStudio.Services
 
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     string sql = $"DROP TABLE {table}";
-                    SQLiteCommand cmd = new SQLiteCommand(sql, conn);
+                    SqliteCommand cmd = new SqliteCommand(sql, conn);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -194,11 +199,11 @@ namespace SQLiteStudio.Services
 
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     string sql = $"DROP TABLE IF EXISTS {table}";
-                    SQLiteCommand cmd = new SQLiteCommand(sql, conn);
+                    SqliteCommand cmd = new SqliteCommand(sql, conn);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -209,20 +214,20 @@ namespace SQLiteStudio.Services
         }
         public IEnumerable<DataTable> ExecuteQuery(string queryText, string databasePath)
         {
-            using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+            using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
             {
                 List<DataTable> tables = new List<DataTable>();
                 conn.Open();
                 var queries = queryText.Split(';');
                 foreach (string query in queries)
                 {
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                    using (SqliteCommand cmd = new SqliteCommand(query, conn))
                     {
                         if (query.ToLower().Contains("select"))
                         {
                             DataTable table = new DataTable();
-                            SQLiteDataAdapter adapter = new SQLiteDataAdapter(cmd);
-                            adapter.Fill(table);
+                            SqliteDataReader reader = cmd.ExecuteReader();
+                            table.Load(reader);
                             tables.Add(table);
                         }
                         else
@@ -239,12 +244,12 @@ namespace SQLiteStudio.Services
             if (Regex.Match(tableName, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
                 List<ColumnData> columns = new List<ColumnData>();
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     string sql = $"PRAGMA table_info({tableName})";
-                    SQLiteCommand cmd = new SQLiteCommand(sql, conn);
-                    SQLiteDataReader reader = cmd.ExecuteReader();
+                    SqliteCommand cmd = new SqliteCommand(sql, conn);
+                    SqliteDataReader reader = cmd.ExecuteReader();
                     while (reader.Read())
                     {
                         columns.Add(new ColumnData
@@ -282,14 +287,14 @@ namespace SQLiteStudio.Services
         }
         public IEnumerable<string> GetTables(string databasePath)
         {
-            using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+            using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
             {
                 conn.Open();
                 List<string> tables = new List<string>();
                 string sql = @"
                     SELECT name FROM sqlite_master WHERE type='table'";
-                SQLiteCommand cmd = new SQLiteCommand(sql, conn);
-                SQLiteDataReader reader = cmd.ExecuteReader();
+                SqliteCommand cmd = new SqliteCommand(sql, conn);
+                SqliteDataReader reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     tables.Add(reader["name"].ToString());
@@ -301,14 +306,17 @@ namespace SQLiteStudio.Services
         {
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                DataTable cachedData = new DataTable();
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                DataSet dataSet = new DataSet();
+                dataSet.Tables.Add(new DataTable());
+                dataSet.EnforceConstraints = false;
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     conn.Open();
                     string sql = $"SELECT * FROM {table}";
-                    SQLiteDataAdapter adapter = new SQLiteDataAdapter(sql, conn);
-                    adapter.Fill(cachedData);
-                    return cachedData;
+                    SqliteCommand cmd = new SqliteCommand(sql, conn);
+                    SqliteDataReader reader = cmd.ExecuteReader();
+                    dataSet.Tables[0].Load(reader);
+                    return dataSet.Tables[0];
                 }
             }
             else
@@ -321,12 +329,12 @@ namespace SQLiteStudio.Services
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
                 List<ColumnData> newColumns = oldColumns.Select((c, i) => { c.Name = newColumnNames[i]; return c; }).ToList();
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     string sql = $@"
                         ALTER TABLE {table}
                         RENAME TO {table}_temp";
-                    using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
+                    using (SqliteCommand cmd = new SqliteCommand(sql, conn))
                     {
                         cmd.ExecuteNonQuery();
                     }
@@ -350,10 +358,10 @@ namespace SQLiteStudio.Services
         {
             if (Regex.Match(newTableName, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     string sql = $"ALTER TABLE {oldTableName} RENAME TO {newTableName}";
-                    SQLiteCommand cmd = new SQLiteCommand(sql, conn);
+                    SqliteCommand cmd = new SqliteCommand(sql, conn);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -366,7 +374,7 @@ namespace SQLiteStudio.Services
         {
             if (Regex.Match(table, "^[a-zA-Z_][a-zA-Z0-9_]*$").Success)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+                using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
                 {
                     //Begin transaction
                     StringBuilder sql = new StringBuilder($"BEGIN TRANSACTION; ");
@@ -422,42 +430,9 @@ namespace SQLiteStudio.Services
                     sql.Append($" FROM {table}; ");
                     //Delete temp table
                     sql.Append($"DROP TABLE {table}_temp; transaction commit");
-                    SQLiteCommand cmd = new SQLiteCommand(sql.ToString(), conn);
+                    SqliteCommand cmd = new SqliteCommand(sql.ToString(), conn);
                     cmd.ExecuteNonQuery();
                 }
-                //DataTable cachedData = GetRowData(table, databasePath);
-                //DropTable(table, databasePath);
-                //BuildTable(table, newColumns, databasePath);
-                //using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
-                //{
-                //    foreach (DataRow row in cachedData.Rows)
-                //    {
-                //        using (SQLiteCommand cmd = new SQLiteCommand(conn))
-                //        {
-                //            StringBuilder sqlParameters = new StringBuilder($"INSERT INTO {table} (");
-                //            StringBuilder sqlValues = new StringBuilder(" VALUES (");
-                //            int ct = 0;
-                //            foreach (ColumnData column in oldColumns)
-                //            {
-                //                if (ct != 0)
-                //                {
-                //                    sqlParameters.Append(", ");
-                //                    sqlValues.Append(", ");
-                //                }
-                //                sqlParameters.Append(column.Name);
-                //                sqlValues.Append(string.Concat("@VALUE", ct));
-                //                cmd.Parameters.Add(string.Concat("@VALUE", ct), InferDbType(column.DataType)).Value = row[column.Name];
-                //                ct++;
-                //            }
-                //            sqlParameters.Append(") ");
-                //            sqlParameters.Append(sqlValues.ToString());
-                //            sqlParameters.Append(")");
-                //            cmd.CommandText = sqlParameters.ToString();
-                //            cmd.ExecuteNonQuery();
-                //        }
-
-                //    }
-                //}
             }
             else
             {
@@ -466,12 +441,12 @@ namespace SQLiteStudio.Services
         }
         public void TestQuery(string databasePath)
         {
-            using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(databasePath)))
+            using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(databasePath)))
             {
                 conn.Open();
                 string sql = $"SELECT Id, strftime('%m-%Y', PostDate) as monthyear, PostDate FROM Transactions";
-                SQLiteCommand cmd = new SQLiteCommand(sql, conn);
-                SQLiteDataReader reader = cmd.ExecuteReader();
+                SqliteCommand cmd = new SqliteCommand(sql, conn);
+                SqliteDataReader reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     string va = reader["Id"].ToString();
@@ -486,7 +461,11 @@ namespace SQLiteStudio.Services
         private string BuildDatabaseConnectionFromPath(string dbFilePath)
         {
             //@"Data Source=C:\Data\Database\home.db;version=3;new=False"
-            return $@"Data Source={dbFilePath};version=3;new=False";
+            SqliteConnectionStringBuilder builder = new SqliteConnectionStringBuilder();
+            builder.DataSource = dbFilePath;
+            builder.Mode = SqliteOpenMode.ReadWriteCreate;
+
+            return builder.ToString();
         }
         private IEnumerable<Item> GetColumnItems(Item table)
         {
@@ -503,12 +482,12 @@ namespace SQLiteStudio.Services
             string[] info = column.Path.Split(';');
             string path = info[0];
             string table = info[1];
-            using (SQLiteConnection conn = new SQLiteConnection(BuildDatabaseConnectionFromPath(path)))
+            using (SqliteConnection conn = new SqliteConnection(BuildDatabaseConnectionFromPath(path)))
             {
                 conn.Open();
                 string sql = $"PRAGMA table_info({table});";
-                SQLiteCommand cmd = new SQLiteCommand(sql, conn);
-                SQLiteDataReader reader = cmd.ExecuteReader();
+                SqliteCommand cmd = new SqliteCommand(sql, conn);
+                SqliteDataReader reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     string val = reader["name"].ToString();
