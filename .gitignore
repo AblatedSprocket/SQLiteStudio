@@ -1,2 +1,5 @@
-/bin
-/packages
+.vs/
+bin/
+obj/
+packages/
+TestResults/

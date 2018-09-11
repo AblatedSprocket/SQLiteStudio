@@ -105,6 +105,7 @@
     <Compile Include="Services\Models\Item.cs" />
     <Compile Include="Models\DocumentRequestedEventArgs.cs" />
     <Compile Include="Services\SqliteService.cs" />
+    <Compile Include="Services\SystemSqliteService.cs" />
     <Compile Include="Utilities\Extensions.cs" />
     <Compile Include="Utilities\Translations.cs" />
     <Page Include="AddDatabase\AddDatabaseDialog.xaml">
